@@ -2,6 +2,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    SKIP_SET_WEBHOOK: bool = False
+
     BOT_TOKEN: str
     WEBHOOK_URL: str
     WEBHOOK_SECRET: str | None = None

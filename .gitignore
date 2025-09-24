@@ -94,3 +94,6 @@ htmlcov/
 ### Jupyter (optional) ###
 .ipynb_checkpoints/
 *.ipynb
+
+### Cloudflared ###
+cloudflared.exe

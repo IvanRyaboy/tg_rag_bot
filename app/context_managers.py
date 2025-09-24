@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 import os
 
+from app.logging_config import setup_logging
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
@@ -19,6 +20,8 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 DATABASE_CONN = os.getenv("PGVECTOR_CONN")
 LLM_CHAT_MODEL = os.getenv("LLM_CHAT_MODEL", "gpt-4o-mini")
 LLM_EMBED_MODEL = os.getenv("LLM_EMBED_MODEL", "text-embedding-3-small")
+
+log = setup_logging()
 
 
 class AppState:
@@ -42,21 +45,17 @@ async def lifespan(_: FastAPI):
     if not DATABASE_CONN:
         raise RuntimeError("DATABASE_CONN обязателен (postgresql+psycopg://...)")
 
-    # 1) Инициализируем бота
     app_state.bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-    # 2) Инициализируем LLM/Embeddings
     app_state.llm = ChatOpenAI(model=LLM_CHAT_MODEL, base_url=OPENAI_BASE_URL)
     app_state.emb = OpenAIEmbeddings(model=LLM_EMBED_MODEL, base_url=OPENAI_BASE_URL)
 
-    # 3) Инициализируем векторное хранилище
     app_state.vs = PGVector(
         embeddings=app_state.emb,
         collection_name="apartments",
         connection=DATABASE_CONN,
     )
 
-    # 5) Регистрируем вебхук
     try:
         await app_state.bot.set_webhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
         log.info("Webhook set to %s", WEBHOOK_URL)
