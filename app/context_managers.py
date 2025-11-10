@@ -3,9 +3,13 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from langchain_postgres import PGVector
+from app.state import require_state
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from dotenv import load_dotenv
+from settings import settings
+from dataclasses import dataclass
+from typing import AsyncIterator
 import os
 
 from app.logging_config import setup_logging
@@ -23,15 +27,7 @@ LLM_EMBED_MODEL = os.getenv("LLM_EMBED_MODEL", "text-embedding-3-small")
 
 log = setup_logging()
 
-
-class AppState:
-    bot: Bot
-    llm: ChatOpenAI
-    emb: OpenAIEmbeddings
-    vs: PGVector
-
-
-app_state = AppState()
+app_state = require_state()
 
 
 @asynccontextmanager
@@ -71,3 +67,34 @@ async def lifespan(_: FastAPI):
         finally:
             await app_state.bot.session.close()
         log.info("Webhook deleted and bot session closed")
+
+
+@dataclass(slots=True, frozen=True)
+class Resources:
+    emb: OpenAIEmbeddings
+    vs: PGVector
+
+
+@asynccontextmanager
+async def embed_context(collection_name: str) -> AsyncIterator[Resources]:
+    if not settings.OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY обязателен")
+    if not settings.PGVECTOR_CONN:
+        raise RuntimeError("PGVECTOR_CONN обязателен (SQLAlchemy URI для langchain_postgres)")
+
+    emb = OpenAIEmbeddings(
+        model=settings.LLM_EMBED_MODEL,
+        base_url=settings.OPENAI_BASE_URL,
+    )
+
+    vs = PGVector(
+        embeddings=emb,
+        collection_name=collection_name,
+        connection=settings.PGVECTOR_CONN,
+    )
+
+    res = Resources(emb=emb, vs=vs)
+    try:
+        yield res
+    finally:
+        pass

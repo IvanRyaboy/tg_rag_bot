@@ -1,9 +1,9 @@
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.types import Update
 from aiogram.client.default import DefaultBotProperties
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_postgres import PGVector
@@ -42,15 +42,6 @@ async def lifespan(_: FastAPI):
     try:
         await app_state.bot.set_webhook(url=settings.WEBHOOK_URL, secret_token=settings.WEBHOOK_SECRET or "")
         log.info("Webhook set to %s", settings.WEBHOOK_URL)
-        if not settings.SKIP_SET_WEBHOOK:
-            await app_state.bot.set_webhook(
-                url=settings.WEBHOOK_URL,
-                secret_token=settings.WEBHOOK_SECRET or "",
-                allowed_updates=Update.all_types(),
-            )
-            log.info("Webhook set to %s", settings.WEBHOOK_URL)
-        else:
-            log.info("SKIP_SET_WEBHOOK=true пропускаем установку вебхука")
     except Exception:
         await app_state.bot.session.close()
         raise
@@ -60,8 +51,6 @@ async def lifespan(_: FastAPI):
     finally:
         try:
             await app_state.bot.delete_webhook(drop_pending_updates=False)
-            if not settings.SKIP_SET_WEBHOOK:
-                await app_state.bot.delete_webhook(drop_pending_updates=False)
         finally:
             await app_state.bot.session.close()
         log.info("Webhook deleted and bot session closed")
@@ -74,6 +63,7 @@ app.include_router(webhook_router)
 async def health():
     ok = all([app_state.bot, app_state.llm, app_state.emb, app_state.vs])
     return {"ok": ok}
+
 
 if __name__ == "__main__":
     import uvicorn
